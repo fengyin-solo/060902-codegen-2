@@ -11,6 +11,8 @@ export const store = reactive({
   timelines: [],
   selectedTimeline: null,
   selectedTimelineNode: null,
+  highlightMessageId: null,
+  scrollToMessageId: null,
 
   setConversations(convs) {
     this.conversations = convs
@@ -45,6 +47,14 @@ export const store = reactive({
     this.selectedTimelineNode = node
   },
 
+  setHighlightMessageId(msgId) {
+    this.highlightMessageId = msgId
+  },
+
+  setScrollToMessageId(msgId) {
+    this.scrollToMessageId = msgId
+  },
+
   clearAll() {
     this.conversations = []
     this.selectedConversation = null
@@ -53,5 +63,7 @@ export const store = reactive({
     this.timelines = []
     this.selectedTimeline = null
     this.selectedTimelineNode = null
+    this.highlightMessageId = null
+    this.scrollToMessageId = null
   }
 })

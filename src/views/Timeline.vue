@@ -175,15 +175,51 @@
             </span>
           </div>
 
+          <div class="key-message-highlight" v-if="selectedNode.representativeMessage">
+            <div class="key-message-header">
+              <span class="key-label">📍 关键消息</span>
+              <span class="key-position">第 {{ getMessagePositionInConversation(selectedNode.representativeMessage) }} 条</span>
+            </div>
+            <div class="key-message-content">
+              <div 
+                class="chat-message highlighted-key"
+                :class="{ sent: selectedNode.representativeMessage.isSent, received: selectedNode.representativeMessage.isReceived }"
+              >
+                <div class="chat-avatar">
+                  {{ selectedNode.representativeMessage.isSent ? '👤' : '💑' }}
+                </div>
+                <div class="chat-content">
+                  <div class="chat-bubble">
+                    {{ selectedNode.representativeMessage.body }}
+                  </div>
+                  <div class="chat-time">{{ formatDateTime(selectedNode.representativeMessage.date) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions-bar">
+            <button class="btn btn-primary" @click="jumpToWallMessage">
+              🎨 在情书墙中查看 →
+            </button>
+          </div>
+
           <h4 class="section-title">💬 当时的对话</h4>
           
           <div class="messages-list">
             <div 
-              v-for="msg in displayMessages" 
+              v-for="(msg, idx) in displayMessages" 
               :key="msg.id"
               class="chat-message"
-              :class="{ sent: msg.isSent, received: msg.isReceived }"
+              :class="{ 
+                sent: msg.isSent, 
+                received: msg.isReceived,
+                'is-key-message': msg.id === selectedNode.representativeMessage?.id
+              }"
             >
+              <div class="message-index" v-if="showAllMessages">
+                #{{ idx + 1 }}
+              </div>
               <div class="chat-avatar">
                 {{ msg.isSent ? '👤' : '💑' }}
               </div>
@@ -191,7 +227,15 @@
                 <div class="chat-bubble">
                   {{ msg.body }}
                 </div>
-                <div class="chat-time">{{ formatDateTime(msg.date) }}</div>
+                <div class="chat-time">
+                  {{ formatDateTime(msg.date) }}
+                  <span class="global-pos" v-if="showAllMessages">
+                    · 对话中第 {{ getMessagePositionInConversation(msg) }} 条
+                  </span>
+                </div>
+              </div>
+              <div class="key-indicator" v-if="msg.id === selectedNode.representativeMessage?.id">
+                ⭐ 关键
               </div>
             </div>
           </div>
@@ -209,8 +253,10 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { store } from '@/store'
 
+const router = useRouter()
 const selectedTimelineId = ref(null)
 const activeNodeIndex = ref(-1)
 const showNodeModal = ref(false)
@@ -219,6 +265,11 @@ const showAllMessages = ref(false)
 const chartWidth = ref(800)
 const chartHeight = ref(200)
 const chartPadding = { top: 20, right: 20, bottom: 20, left: 20 }
+
+const currentLoveLetter = computed(() => {
+  if (!selectedTimelineId.value) return null
+  return store.loveLetters.find(l => l.conversation.id === selectedTimelineId.value)
+})
 
 const currentTimeline = computed(() => {
   if (!selectedTimelineId.value && store.timelines.length > 0) {
@@ -328,6 +379,34 @@ function closeModal() {
   showNodeModal.value = false
   selectedNode.value = null
   showAllMessages.value = false
+}
+
+function getMessagePositionInConversation(msg) {
+  if (!currentLoveLetter.value) return 0
+  const allMessages = currentLoveLetter.value.conversation.messages
+  const idx = allMessages.findIndex(m => m.id === msg.id)
+  return idx >= 0 ? idx + 1 : 0
+}
+
+function jumpToWallMessage() {
+  if (!selectedNode.value || !selectedNode.value.representativeMessage) return
+  
+  const msgId = selectedNode.value.representativeMessage.id
+  const convId = selectedTimelineId.value
+  
+  store.setScrollToMessageId(msgId)
+  store.setHighlightMessageId(msgId)
+  
+  const loveLetter = store.loveLetters.find(l => l.conversation.id === convId)
+  if (loveLetter) {
+    store.setSelectedConversation(loveLetter)
+  }
+  
+  closeModal()
+  router.push({
+    path: '/wall',
+    query: { highlight: msgId, conv: convId }
+  })
 }
 
 function getPeriodX(idx) {
@@ -892,6 +971,100 @@ onMounted(() => {
   border-top: 1px solid var(--border);
 }
 
+.key-message-highlight {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  border: 2px solid var(--love-red);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  animation: pulse-highlight 2s ease-in-out infinite;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 107, 107, 0); }
+}
+
+.key-message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.key-label {
+  font-weight: bold;
+  color: var(--love-red);
+  font-size: 0.9rem;
+}
+
+.key-position {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  background: white;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+}
+
+.key-message-content {
+  background: white;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.key-message-content .highlighted-key .chat-bubble {
+  box-shadow: 0 0 0 2px var(--love-red);
+}
+
+.modal-actions-bar {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.modal-actions-bar .btn {
+  width: 100%;
+  text-align: center;
+}
+
+.messages-list .chat-message {
+  position: relative;
+}
+
+.messages-list .chat-message.is-key-message {
+  padding: 0.5rem;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+  border-radius: 12px;
+  margin: 0.5rem -0.5rem;
+}
+
+.message-index {
+  position: absolute;
+  left: -25px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--text-light);
+  font-weight: bold;
+}
+
+.chat-time .global-pos {
+  color: var(--love-red);
+  font-weight: 500;
+}
+
+.key-indicator {
+  position: absolute;
+  right: -10px;
+  top: 10px;
+  background: var(--love-red);
+  color: white;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
 @media (max-width: 768px) {
   .timeline-stats {
     gap: 1rem;
@@ -928,6 +1101,10 @@ onMounted(() => {
   
   .modal-content {
     max-height: 90vh;
+  }
+  
+  .message-index {
+    display: none;
   }
 }
 </style>

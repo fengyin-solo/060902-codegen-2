@@ -1,5 +1,11 @@
 <template>
   <div class="wall-page">
+    <div v-if="store.highlightMessageId" class="timeline-jump-banner">
+      <span class="banner-icon">📍</span>
+      <span class="banner-text">从时间轴定位到此处 · 关键消息正在高亮显示</span>
+      <button class="banner-close" @click="clearHighlight">✕</button>
+    </div>
+    
     <div class="wall-header" v-if="store.loveLetters.length > 0">
       <h2>🎨 情书墙</h2>
       <p>点击展品查看完整对话，点击连线查看回复关系</p>
@@ -90,9 +96,11 @@
                 sent: msg.isSent, 
                 received: msg.isReceived,
                 'has-highlight': msg.highlights && msg.highlights.length > 0,
-                'selected': selectedMsg === msg.id
+                'selected': selectedMsg === msg.id,
+                'highlighted-from-timeline': msg.id === store.highlightMessageId,
+                'scroll-target': msg.id === store.scrollToMessageId
               }"
-              :ref="el => setMessageRef(letter, idx, el)"
+              :ref="el => setMessageRef(letter, idx, el, msg.id)"
               @click="selectMessage(letter, msg)"
             >
               <div class="exhibit-header">
@@ -209,10 +217,11 @@
   </div>
 </template>
 
-<script setup>import { ref, computed, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+<script setup>import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { store } from '@/store';
 const router = useRouter();
+const route = useRoute();
 const wallCanvas = ref(null);
 const svgRef = ref(null);
 const displayMode = ref('all');
@@ -227,12 +236,79 @@ const hangUpOptions = ref({
  anonymous: true
 });
 const messageRefs = ref({});
+const messageIdToRef = ref({});
+const scrollIndicator = ref(null);
+const showScrollIndicator = ref(false);
 const displayModes = [
  { value: 'all', label: '全部' },
  { value: 'love', label: '💖 情书模式' },
  { value: 'quarrel', label: '🔥 争吵模式' },
  { value: 'cute', label: '🥺 撒娇模式' }
 ];
+
+function handleRouteParams() {
+  const highlightMsgId = route.query.highlight || store.highlightMessageId
+  const convId = route.query.conv
+  
+  if (highlightMsgId) {
+    store.setHighlightMessageId(highlightMsgId)
+    store.setScrollToMessageId(highlightMsgId)
+  }
+  
+  if (convId && !store.selectedConversation) {
+    const letter = store.loveLetters.find(l => l.conversation.id === convId)
+    if (letter) {
+      store.setSelectedConversation(letter)
+    }
+  }
+  
+  if (highlightMsgId) {
+    nextTick(() => {
+      scrollToMessage(highlightMsgId)
+    })
+  }
+}
+
+function scrollToMessage(msgId) {
+  const el = messageIdToRef.value[msgId]
+  const container = wallCanvas.value
+  
+  if (!el || !container) {
+    setTimeout(() => scrollToMessage(msgId), 100)
+    return
+  }
+  
+  const groupEl = el.closest('.letter-group')
+  if (groupEl) {
+    groupEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+  
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+    
+    showScrollIndicator.value = true
+    setTimeout(() => {
+      showScrollIndicator.value = false
+      store.setScrollToMessageId(null)
+    }, 3000)
+    
+    setTimeout(() => {
+      store.setHighlightMessageId(null)
+    }, 5000)
+  }, 300)
+  
+  selectedMsg.value = msgId
+}
+
+watch(
+  () => [route.query.highlight, route.query.conv, store.loveLetters.length],
+  () => {
+    if (store.loveLetters.length > 0) {
+      handleRouteParams()
+    }
+  },
+  { immediate: true }
+)
 const lineColor = computed(() => {
  switch (displayMode.value) {
  case 'quarrel': return '#e74c3c';
@@ -257,10 +333,13 @@ const displayedLetters = computed(() => {
  return true;
  });
 });
-function setMessageRef(letter, idx, el) {
+function setMessageRef(letter, idx, el, msgId) {
  const key = letter.conversation.id + '-' + idx;
  if (el) {
  messageRefs.value[key] = el;
+ if (msgId) {
+   messageIdToRef.value[msgId] = el;
+ }
  }
 }
 function getMessagePosition(letter, idx) {
@@ -313,6 +392,10 @@ function highlightRelationship(rel) {
 }
 function selectMessage(letter, msg) {
  selectedMsg.value = msg.id;
+}
+function clearHighlight() {
+ store.setHighlightMessageId(null);
+ store.setScrollToMessageId(null);
 }
 function viewConversation(letter) {
  selectedLetter.value = letter;
@@ -753,5 +836,89 @@ onMounted(() => {
   gap: 1rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border);
+}
+
+.timeline-jump-banner {
+  background: linear-gradient(135deg, var(--love-red), var(--love-pink));
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  animation: banner-slide 0.3s ease-out;
+}
+
+@keyframes banner-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.banner-icon {
+  font-size: 1.2rem;
+}
+
+.banner-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+.banner-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.banner-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.message-exhibit.highlighted-from-timeline {
+  border-color: var(--love-red) !important;
+  border-width: 3px !important;
+  box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+  animation: highlight-pulse 2s ease-in-out infinite;
+  z-index: 10;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(255, 107, 107, 0.8);
+    transform: scale(1.02);
+  }
+}
+
+.message-exhibit.scroll-target {
+  border-color: var(--love-pink) !important;
+  border-width: 4px !important;
+}
+
+@media (max-width: 768px) {
+  .timeline-jump-banner {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  
+  .banner-close {
+    align-self: flex-end;
+  }
 }
 </style>

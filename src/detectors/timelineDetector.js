@@ -218,25 +218,66 @@ function findRepresentativeMessage(period, type) {
   let keywordList
   if (type === 'warming') keywordList = WARMING_KEYWORDS
   else if (type === 'cooling') keywordList = COOLING_KEYWORDS
-  else keywordList = [...WARMING_KEYWORDS, ...RECONCILIATION_KEYWORDS]
+  else keywordList = [...RECONCILIATION_KEYWORDS, ...WARMING_KEYWORDS]
+
+  const scoredMessages = messages.map(msg => ({
+    msg,
+    score: calculateMessageScore(msg, keywordList),
+    isSent: msg.isSent,
+    hasKeywords: calculateMessageScore(msg, keywordList) > 0
+  }))
+
+  scoredMessages.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    if (b.hasKeywords !== a.hasKeywords) return b.hasKeywords ? 1 : -1
+    return 0
+  })
 
   let bestMsg = null
-  let bestScore = -1
-
-  for (const msg of messages) {
-    const score = calculateMessageScore(msg, keywordList)
-    if (score > bestScore) {
-      bestScore = score
-      bestMsg = msg
+  const threshold = type === 'cooling' ? 1 : 2
+  
+  for (const sm of scoredMessages) {
+    if (sm.score >= threshold) {
+      bestMsg = sm.msg
+      break
     }
   }
 
-  if (!bestMsg || bestScore === 0) {
-    const midIndex = Math.floor(messages.length / 2)
-    bestMsg = messages[midIndex]
+  if (!bestMsg) {
+    for (const sm of scoredMessages) {
+      if (sm.score > 0) {
+        bestMsg = sm.msg
+        break
+      }
+    }
+  }
+
+  if (!bestMsg) {
+    const nonEmptyMessages = messages.filter(m => m.body && m.body.trim().length > 0)
+    if (nonEmptyMessages.length > 0) {
+      const midIndex = Math.floor(nonEmptyMessages.length / 2)
+      bestMsg = nonEmptyMessages[midIndex]
+    } else {
+      const midIndex = Math.floor(messages.length / 2)
+      bestMsg = messages[midIndex]
+    }
   }
 
   return bestMsg
+}
+
+function getContextMessages(period, centerMsg, contextSize = 2) {
+  const messages = period.messages
+  const centerIndex = messages.findIndex(m => m.id === centerMsg?.id)
+  
+  if (centerIndex === -1) {
+    return messages.slice(0, Math.min(5, messages.length))
+  }
+  
+  const startIdx = Math.max(0, centerIndex - contextSize)
+  const endIdx = Math.min(messages.length, centerIndex + contextSize + 1)
+  
+  return messages.slice(startIdx, endIdx)
 }
 
 function generateWarmingDescription(curr, prev) {
