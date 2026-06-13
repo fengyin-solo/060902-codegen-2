@@ -5,6 +5,7 @@
       <nav>
         <router-link to="/">首页</router-link>
         <router-link to="/wall">情书墙</router-link>
+        <router-link to="/timeline">时间轴</router-link>
         <router-link to="/gallery">匿名广场</router-link>
       </nav>
     </header>

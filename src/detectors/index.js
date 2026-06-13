@@ -3,13 +3,15 @@ import frequencyDetector from './frequencyDetector.js'
 import loveLetterDetector from './loveLetterDetector.js'
 import quarrelDetector from './quarrelDetector.js'
 import cuteDetector from './cuteDetector.js'
+import timelineDetector from './timelineDetector.js'
 
 const detectors = [
   keywordDetector,
   frequencyDetector,
   loveLetterDetector,
   quarrelDetector,
-  cuteDetector
+  cuteDetector,
+  timelineDetector
 ]
 
 export function registerDetector(detector) {
@@ -104,14 +106,46 @@ export function findLoveLetters(conversations) {
     .filter(r => r.totalScore > 0)
     .map(r => {
       const highlightedMessages = highlightMessages(r.conversation, r.scores)
+      const timelineResult = r.scores.timeline
       return {
         ...r,
         highlightedMessages,
         loveScore: r.scores.loveLetter || 0,
-        relationships: analyzeMessageRelationships(r.conversation)
+        relationships: analyzeMessageRelationships(r.conversation),
+        timelineNodes: timelineResult?.timelineNodes || [],
+        timelinePeriods: timelineResult?.periods || []
       }
     })
     .sort((a, b) => b.loveScore - a.loveScore)
+}
+
+export function generateTimeline(loveLetter) {
+  if (!loveLetter || !loveLetter.conversation) {
+    return { nodes: [], periods: [] }
+  }
+
+  if (loveLetter.timelineNodes && loveLetter.timelinePeriods) {
+    return {
+      nodes: loveLetter.timelineNodes,
+      periods: loveLetter.timelinePeriods
+    }
+  }
+
+  const result = timelineDetector.detect(loveLetter.conversation)
+  return {
+    nodes: result.timelineNodes || [],
+    periods: result.periods || []
+  }
+}
+
+export function getAllTimelines(loveLetters) {
+  return loveLetters.map(letter => ({
+    conversationId: letter.conversation.id,
+    conversationName: letter.conversation.name,
+    loveScore: letter.loveScore,
+    totalScore: letter.totalScore,
+    ...generateTimeline(letter)
+  })).filter(t => t.nodes.length > 0)
 }
 
 function highlightMessages(conversation, scores) {
@@ -144,5 +178,6 @@ export {
   frequencyDetector,
   loveLetterDetector,
   quarrelDetector,
-  cuteDetector
+  cuteDetector,
+  timelineDetector
 }

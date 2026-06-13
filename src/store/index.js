@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { getAllTimelines } from '@/detectors'
 
 export const store = reactive({
   conversations: [],
@@ -7,6 +8,9 @@ export const store = reactive({
   anonymousPosts: [],
   processing: false,
   error: null,
+  timelines: [],
+  selectedTimeline: null,
+  selectedTimelineNode: null,
 
   setConversations(convs) {
     this.conversations = convs
@@ -14,6 +18,7 @@ export const store = reactive({
 
   setLoveLetters(letters) {
     this.loveLetters = letters
+    this.timelines = getAllTimelines(letters)
   },
 
   setSelectedConversation(conv) {
@@ -32,10 +37,21 @@ export const store = reactive({
     this.error = err
   },
 
+  setSelectedTimeline(timeline) {
+    this.selectedTimeline = timeline
+  },
+
+  setSelectedTimelineNode(node) {
+    this.selectedTimelineNode = node
+  },
+
   clearAll() {
     this.conversations = []
     this.selectedConversation = null
     this.loveLetters = []
     this.error = null
+    this.timelines = []
+    this.selectedTimeline = null
+    this.selectedTimelineNode = null
   }
 })

@@ -70,6 +70,7 @@
         <h3>✨ 为您找到 {{ store.loveLetters.length }} 段情书级对话</h3>
         <div class="actions">
           <button class="btn btn-secondary" @click="clearAll">🔄 重新上传</button>
+          <router-link to="/timeline" class="btn btn-secondary">📅 关系时间轴</router-link>
           <router-link to="/wall" class="btn btn-primary">🎨 查看情书墙</router-link>
         </div>
       </div>
